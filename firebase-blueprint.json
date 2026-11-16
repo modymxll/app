@@ -1,0 +1,292 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user account and RBAC role assignment.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["ADMIN", "DRIVER"] },
+        "driverId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": ["userId", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "AdminMarker": {
+      "title": "AdminMarker",
+      "description": "Explicit admin authorization marker document.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email", "createdAt"]
+    },
+    "Driver": {
+      "title": "Driver",
+      "description": "Delivery driver operational profile and live GPS status.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["ON_SHIFT", "ACTIVE", "INACTIVE", "ON_LEAVE", "SUSPENDED", "OFF_SHIFT"] },
+        "gpsActive": { "type": "boolean" },
+        "lastLat": { "type": "number" },
+        "lastLng": { "type": "number" },
+        "lastAccuracyMeters": { "type": "integer" },
+        "lastGpsAtEpochMs": { "type": "integer" },
+        "isDeleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "username", "phone", "status", "gpsActive", "isDeleted", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Laundry customer contact record separated from locations.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "primaryPhone": { "type": "string" },
+        "secondaryPhone": { "type": "string" },
+        "notes": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "primaryPhone", "isActive", "createdAt", "updatedAt"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Customer branch or delivery address linked to a customer.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "branchName": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "primaryPhone": { "type": "string" },
+        "secondaryPhone": { "type": "string" },
+        "address": { "type": "string" },
+        "city": { "type": "string" },
+        "district": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "accessInstructions": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "branchName", "primaryPhone", "latitude", "longitude", "createdAt", "updatedAt"]
+    },
+    "Visit": {
+      "title": "Visit",
+      "description": "Scheduled pickup/delivery task assigned to a driver.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "locationId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "locationName": { "type": "string" },
+        "district": { "type": "string" },
+        "address": { "type": "string" },
+        "primaryPhone": { "type": "string" },
+        "secondaryPhone": { "type": "string" },
+        "accessInstructions": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "assignedDriverId": { "type": "string" },
+        "assignedDriverUserId": { "type": "string" },
+        "assignedDriverName": { "type": "string" },
+        "operationType": { "type": "string", "enum": ["PICKUP", "DELIVERY", "BOTH"] },
+        "priority": { "type": "string", "enum": ["NORMAL", "URGENT"] },
+        "status": { "type": "string", "enum": ["NOT_STARTED", "EN_ROUTE", "ARRIVED", "IN_PROGRESS", "COMPLETED", "LATE", "CANCELLED", "NOT_EXECUTED"] },
+        "scheduledAtEpochMs": { "type": "integer" },
+        "arrivedAtEpochMs": { "type": "integer" },
+        "startedAtEpochMs": { "type": "integer" },
+        "completedAtEpochMs": { "type": "integer" },
+        "delaySeconds": { "type": "integer" },
+        "delayMinutes": { "type": "integer" },
+        "insideGeofence": { "type": "boolean" },
+        "arrivalDistanceMeters": { "type": "integer" },
+        "invoiceNumber": { "type": "string" },
+        "posInvoiceRef": { "type": "string" },
+        "amountDue": { "type": "number" },
+        "amountCollected": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["CASH", "MADA", "VISA", "MASTERCARD", "BANK_TRANSFER", "GCC_NET", "UNPAID"] },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PARTIAL", "UNPAID"] },
+        "pickupNotes": { "type": "string" },
+        "pickupPhotoUri": { "type": "string" },
+        "nonExecutionReason": { "type": "string" },
+        "recurringScheduleId": { "type": "string" },
+        "occurrenceKey": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "locationId", "locationName", "primaryPhone", "assignedDriverId", "assignedDriverUserId", "operationType", "priority", "status", "scheduledAtEpochMs", "paymentMethod", "paymentStatus", "createdAt", "updatedAt"]
+    },
+    "RecurringSchedule": {
+      "title": "RecurringSchedule",
+      "description": "Recurring visit template with weekday rules and duplicate prevention.",
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string" },
+        "locationId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "locationName": { "type": "string" },
+        "assignedDriverId": { "type": "string" },
+        "assignedDriverUserId": { "type": "string" },
+        "assignedDriverName": { "type": "string" },
+        "operationType": { "type": "string", "enum": ["PICKUP", "DELIVERY", "BOTH"] },
+        "weekdaysCsv": { "type": "string" },
+        "timeHHmm": { "type": "string" },
+        "startEpochMs": { "type": "integer" },
+        "endEpochMs": { "type": "integer" },
+        "isContinuous": { "type": "boolean" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "locationId", "assignedDriverId", "assignedDriverUserId", "operationType", "weekdaysCsv", "timeHHmm", "startEpochMs", "isContinuous", "isActive", "createdAt", "updatedAt"]
+    },
+    "DriverAttendance": {
+      "title": "DriverAttendance",
+      "description": "Driver shift start/end attendance session.",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string" },
+        "userId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "startedAtEpochMs": { "type": "integer" },
+        "endedAtEpochMs": { "type": "integer" },
+        "durationMinutes": { "type": "integer" },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["driverId", "userId", "driverName", "startedAtEpochMs", "isActive", "createdAt", "updatedAt"]
+    },
+    "GpsLocation": {
+      "title": "GpsLocation",
+      "description": "GPS coordinate recorded strictly during an active driver shift.",
+      "type": "object",
+      "properties": {
+        "driverId": { "type": "string" },
+        "userId": { "type": "string" },
+        "attendanceId": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "accuracyMeters": { "type": "integer" },
+        "speedMps": { "type": "number" },
+        "isStopped": { "type": "boolean" },
+        "recordedAtEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["driverId", "userId", "attendanceId", "latitude", "longitude", "accuracyMeters", "recordedAtEpochMs", "createdAt"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Immutable financial transaction linked to a delivery visit.",
+      "type": "object",
+      "properties": {
+        "visitId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverUserId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "customerId": { "type": "string" },
+        "locationId": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "amountDue": { "type": "number" },
+        "amountCollected": { "type": "number" },
+        "amountRemaining": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["CASH", "MADA", "VISA", "MASTERCARD", "BANK_TRANSFER", "GCC_NET", "UNPAID"] },
+        "paymentStatus": { "type": "string", "enum": ["PAID", "PARTIAL", "UNPAID"] },
+        "deliveryStatus": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "notes": { "type": "string" },
+        "recordedAtEpochMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["visitId", "driverId", "driverUserId", "invoiceNumber", "amountDue", "amountCollected", "amountRemaining", "paymentMethod", "paymentStatus", "deliveryStatus", "recordedAtEpochMs", "createdAt", "updatedAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "Operational alert or direct message for admin or driver.",
+      "type": "object",
+      "properties": {
+        "targetUserId": { "type": "string" },
+        "senderUserId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "type": { "type": "string" },
+        "relatedVisitId": { "type": "string" },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["targetUserId", "senderUserId", "title", "body", "type", "isRead", "createdAt", "updatedAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Append-only immutable audit trail for sensitive operations.",
+      "type": "object",
+      "properties": {
+        "actorUserId": { "type": "string" },
+        "actorName": { "type": "string" },
+        "actionType": { "type": "string" },
+        "entityType": { "type": "string" },
+        "entityId": { "type": "string" },
+        "oldValue": { "type": "string" },
+        "newValue": { "type": "string" },
+        "metadata": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["actorUserId", "actorName", "actionType", "entityType", "entityId", "oldValue", "newValue", "createdAt"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Operational configuration such as grace period and Geofence radius.",
+      "type": "object",
+      "properties": {
+        "gracePeriodMinutes": { "type": "integer" },
+        "geofenceRadiusMeters": { "type": "integer" },
+        "gpsMovingIntervalSec": { "type": "integer" },
+        "gpsIdleIntervalSec": { "type": "integer" },
+        "notifyShiftEvents": { "type": "boolean" },
+        "notifyArrival": { "type": "boolean" },
+        "notifyPickupDelivery": { "type": "boolean" },
+        "notifyPayments": { "type": "boolean" },
+        "notifyDelays": { "type": "boolean" },
+        "notifyGpsDisconnect": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["gracePeriodMinutes", "geofenceRadiusMeters", "gpsMovingIntervalSec", "gpsIdleIntervalSec", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": { "$ref": "#/entities/UserProfile" }, "description": "User accounts and roles." },
+    "/admins/{adminUid}": { "schema": { "$ref": "#/entities/AdminMarker" }, "description": "Admin access markers." },
+    "/drivers/{driverId}": { "schema": { "$ref": "#/entities/Driver" }, "description": "Driver profiles and GPS telemetry." },
+    "/customers/{customerId}": { "schema": { "$ref": "#/entities/Customer" }, "description": "Customers separated from branches." },
+    "/locations/{locationId}": { "schema": { "$ref": "#/entities/Location" }, "description": "Customer branches/locations." },
+    "/visits/{visitId}": { "schema": { "$ref": "#/entities/Visit" }, "description": "Scheduled and active pickup/delivery visits." },
+    "/recurring_schedules/{scheduleId}": { "schema": { "$ref": "#/entities/RecurringSchedule" }, "description": "Recurring visit rules." },
+    "/driver_attendance/{attendanceId}": { "schema": { "$ref": "#/entities/DriverAttendance" }, "description": "Driver shift attendance logs." },
+    "/gps_locations/{pointId}": { "schema": { "$ref": "#/entities/GpsLocation" }, "description": "Shift-only GPS history breadcrumbs." },
+    "/payment_records/{paymentId}": { "schema": { "$ref": "#/entities/PaymentRecord" }, "description": "Non-deletable financial payment records." },
+    "/notifications/{notificationId}": { "schema": { "$ref": "#/entities/AppNotification" }, "description": "Operational notifications and messages." },
+    "/audit_logs/{logId}": { "schema": { "$ref": "#/entities/AuditLog" }, "description": "Immutable operational audit trail." },
+    "/app_settings/{settingId}": { "schema": { "$ref": "#/entities/AppSettings" }, "description": "System operational settings." }
+  }
+}

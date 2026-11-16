@@ -1,0 +1,465 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn()
+        && ('email_verified' in request.auth.token)
+        && request.auth.token.email_verified == true
+        && ('email' in request.auth.token)
+        && request.auth.token.email == 'ivconquer@gmail.com';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrappedAdmin() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function hasVerifiedEmail(email) {
+      return isSignedIn()
+        && ('email_verified' in request.auth.token)
+        && request.auth.token.email_verified == true
+        && ('email' in request.auth.token)
+        && email is string
+        && email.size() > 0
+        && request.auth.token.email == email;
+    }
+
+    function callerDriverId() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && ('driverId' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data)
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.driverId
+        : '';
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.role in ['ADMIN', 'DRIVER']
+        && (!('email' in data) || (data.email is string && data.email.size() <= 150))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 25))
+        && (!('driverId' in data) || (data.driverId is string && data.driverId.size() <= 128))
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidDriver(data) {
+      return data.userId is string && data.userId.size() <= 128
+        && (!('email' in data) || (data.email is string && data.email.size() <= 150))
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.username is string && data.username.size() >= 2 && data.username.size() <= 40
+        && data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 20
+        && data.status in ['ON_SHIFT', 'ACTIVE', 'INACTIVE', 'ON_LEAVE', 'SUSPENDED', 'OFF_SHIFT']
+        && data.gpsActive is bool
+        && data.isDeleted is bool
+        && (!('lastLat' in data) || data.lastLat is number)
+        && (!('lastLng' in data) || data.lastLng is number)
+        && (!('lastAccuracyMeters' in data) || data.lastAccuracyMeters is int)
+        && (!('lastGpsAtEpochMs' in data) || data.lastGpsAtEpochMs is int)
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidCustomer(data) {
+      return data.name is string && data.name.size() <= 100
+        && data.primaryPhone is string && data.primaryPhone.size() >= 8 && data.primaryPhone.size() <= 20
+        && (!('secondaryPhone' in data) || (data.secondaryPhone is string && data.secondaryPhone.size() <= 20))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && data.isActive is bool
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidLocation(data) {
+      return data.customerId is string && isValidId(data.customerId)
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
+        && data.branchName is string && data.branchName.size() >= 1 && data.branchName.size() <= 120
+        && (!('invoiceNumber' in data) || (data.invoiceNumber is string && data.invoiceNumber.size() <= 60))
+        && data.primaryPhone is string && data.primaryPhone.size() >= 8 && data.primaryPhone.size() <= 20
+        && (!('secondaryPhone' in data) || (data.secondaryPhone is string && data.secondaryPhone.size() <= 20))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 250))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 80))
+        && (!('district' in data) || (data.district is string && data.district.size() <= 80))
+        && data.latitude is number
+        && data.longitude is number
+        && (!('accessInstructions' in data) || (data.accessInstructions is string && data.accessInstructions.size() <= 400))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 400))
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidVisit(data) {
+      return data.customerId is string && isValidId(data.customerId)
+        && data.locationId is string && isValidId(data.locationId)
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
+        && data.locationName is string && data.locationName.size() >= 1 && data.locationName.size() <= 120
+        && (!('district' in data) || (data.district is string && data.district.size() <= 80))
+        && (!('address' in data) || (data.address is string && data.address.size() <= 250))
+        && data.primaryPhone is string && data.primaryPhone.size() >= 8 && data.primaryPhone.size() <= 20
+        && (!('secondaryPhone' in data) || (data.secondaryPhone is string && data.secondaryPhone.size() <= 20))
+        && (!('accessInstructions' in data) || (data.accessInstructions is string && data.accessInstructions.size() <= 400))
+        && (!('latitude' in data) || data.latitude is number)
+        && (!('longitude' in data) || data.longitude is number)
+        && data.assignedDriverId is string && data.assignedDriverId.size() >= 1 && data.assignedDriverId.size() <= 128
+        && data.assignedDriverUserId is string && data.assignedDriverUserId.size() <= 128
+        && (!('assignedDriverName' in data) || (data.assignedDriverName is string && data.assignedDriverName.size() <= 100))
+        && data.operationType in ['PICKUP', 'DELIVERY', 'BOTH']
+        && data.priority in ['NORMAL', 'URGENT']
+        && data.status in ['NOT_STARTED', 'EN_ROUTE', 'ARRIVED', 'IN_PROGRESS', 'COMPLETED', 'LATE', 'CANCELLED', 'NOT_EXECUTED']
+        && data.scheduledAtEpochMs is int
+        && (!('arrivedAtEpochMs' in data) || data.arrivedAtEpochMs is int)
+        && (!('startedAtEpochMs' in data) || data.startedAtEpochMs is int)
+        && (!('completedAtEpochMs' in data) || data.completedAtEpochMs is int)
+        && (!('delaySeconds' in data) || data.delaySeconds is int)
+        && (!('delayMinutes' in data) || data.delayMinutes is int)
+        && (!('insideGeofence' in data) || data.insideGeofence is bool)
+        && (!('arrivalDistanceMeters' in data) || data.arrivalDistanceMeters is int)
+        && (!('invoiceNumber' in data) || (data.invoiceNumber is string && data.invoiceNumber.size() <= 60))
+        && (!('posInvoiceRef' in data) || (data.posInvoiceRef is string && data.posInvoiceRef.size() <= 80))
+        && (!('amountDue' in data) || (data.amountDue is number && data.amountDue >= 0))
+        && (!('amountCollected' in data) || (data.amountCollected is number && data.amountCollected >= 0))
+        && data.paymentMethod in ['CASH', 'MADA', 'VISA', 'MASTERCARD', 'BANK_TRANSFER', 'GCC_NET', 'UNPAID']
+        && data.paymentStatus in ['PAID', 'PARTIAL', 'UNPAID']
+        && (!('pickupNotes' in data) || (data.pickupNotes is string && data.pickupNotes.size() <= 500))
+        && (!('pickupPhotoUri' in data) || (data.pickupPhotoUri is string && data.pickupPhotoUri.size() <= 500))
+        && (!('nonExecutionReason' in data) || (data.nonExecutionReason is string && data.nonExecutionReason.size() <= 300))
+        && (!('recurringScheduleId' in data) || (data.recurringScheduleId is string && data.recurringScheduleId.size() <= 128))
+        && (!('occurrenceKey' in data) || (data.occurrenceKey is string && data.occurrenceKey.size() <= 128))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 500))
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRecurringSchedule(data) {
+      return data.customerId is string && isValidId(data.customerId)
+        && data.locationId is string && isValidId(data.locationId)
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
+        && (!('locationName' in data) || (data.locationName is string && data.locationName.size() <= 120))
+        && data.assignedDriverId is string && data.assignedDriverId.size() >= 1 && data.assignedDriverId.size() <= 128
+        && data.assignedDriverUserId is string && data.assignedDriverUserId.size() <= 128
+        && (!('assignedDriverName' in data) || (data.assignedDriverName is string && data.assignedDriverName.size() <= 100))
+        && data.operationType in ['PICKUP', 'DELIVERY', 'BOTH']
+        && data.weekdaysCsv is string && data.weekdaysCsv.size() >= 1 && data.weekdaysCsv.size() <= 40
+        && data.timeHHmm is string && data.timeHHmm.size() == 5
+        && data.startEpochMs is int
+        && (!('endEpochMs' in data) || data.endEpochMs is int)
+        && data.isContinuous is bool
+        && data.isActive is bool
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAttendance(data) {
+      return data.driverId is string && data.driverId.size() >= 1 && data.driverId.size() <= 128
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.driverName is string && data.driverName.size() >= 1 && data.driverName.size() <= 100
+        && data.startedAtEpochMs is int
+        && (!('endedAtEpochMs' in data) || data.endedAtEpochMs is int)
+        && (!('durationMinutes' in data) || data.durationMinutes is int)
+        && data.isActive is bool
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidGpsPoint(data) {
+      return data.driverId is string && data.driverId.size() >= 1 && data.driverId.size() <= 128
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128
+        && data.attendanceId is string && data.attendanceId.size() >= 1 && data.attendanceId.size() <= 128
+        && data.latitude is number
+        && data.longitude is number
+        && data.accuracyMeters is int
+        && (!('speedMps' in data) || data.speedMps is number)
+        && (!('isStopped' in data) || data.isStopped is bool)
+        && data.recordedAtEpochMs is int
+        && isValidTimestamp(data.createdAt);
+    }
+
+    function isValidPaymentRecord(data) {
+      return data.visitId is string && isValidId(data.visitId)
+        && data.driverId is string && data.driverId.size() >= 1 && data.driverId.size() <= 128
+        && data.driverUserId is string && data.driverUserId.size() >= 1 && data.driverUserId.size() <= 128
+        && (!('driverName' in data) || (data.driverName is string && data.driverName.size() <= 100))
+        && (!('customerId' in data) || (data.customerId is string && data.customerId.size() <= 128))
+        && (!('locationId' in data) || (data.locationId is string && data.locationId.size() <= 128))
+        && data.invoiceNumber is string && data.invoiceNumber.size() <= 60
+        && data.amountDue is number && data.amountDue >= 0
+        && data.amountCollected is number && data.amountCollected >= 0
+        && data.amountRemaining is number && data.amountRemaining >= 0
+        && data.paymentMethod in ['CASH', 'MADA', 'VISA', 'MASTERCARD', 'BANK_TRANSFER', 'GCC_NET', 'UNPAID']
+        && data.paymentStatus in ['PAID', 'PARTIAL', 'UNPAID']
+        && data.deliveryStatus is string && data.deliveryStatus.size() >= 1 && data.deliveryStatus.size() <= 40
+        && (!('latitude' in data) || data.latitude is number)
+        && (!('longitude' in data) || data.longitude is number)
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 400))
+        && data.recordedAtEpochMs is int
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidNotification(data) {
+      return data.targetUserId is string && data.targetUserId.size() >= 1 && data.targetUserId.size() <= 128
+        && data.senderUserId is string && data.senderUserId.size() >= 1 && data.senderUserId.size() <= 128
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 120
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 500
+        && data.type is string && data.type.size() >= 1 && data.type.size() <= 50
+        && (!('relatedVisitId' in data) || (data.relatedVisitId is string && data.relatedVisitId.size() <= 128))
+        && data.isRead is bool
+        && isValidTimestamp(data.createdAt)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidAuditLog(data) {
+      return data.actorUserId is string && data.actorUserId.size() >= 1 && data.actorUserId.size() <= 128
+        && data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 100
+        && data.actionType is string && data.actionType.size() >= 1 && data.actionType.size() <= 60
+        && data.entityType is string && data.entityType.size() >= 1 && data.entityType.size() <= 60
+        && data.entityId is string && data.entityId.size() >= 1 && data.entityId.size() <= 128
+        && data.oldValue is string && data.oldValue.size() <= 400
+        && data.newValue is string && data.newValue.size() <= 400
+        && (!('metadata' in data) || (data.metadata is string && data.metadata.size() <= 500))
+        && isValidTimestamp(data.createdAt);
+    }
+
+    function isValidSettings(data) {
+      return data.gracePeriodMinutes is int && data.gracePeriodMinutes >= 0 && data.gracePeriodMinutes <= 120
+        && data.geofenceRadiusMeters is int && data.geofenceRadiusMeters >= 20 && data.geofenceRadiusMeters <= 2000
+        && data.gpsMovingIntervalSec is int && data.gpsMovingIntervalSec >= 10 && data.gpsMovingIntervalSec <= 300
+        && data.gpsIdleIntervalSec is int && data.gpsIdleIntervalSec >= 30 && data.gpsIdleIntervalSec <= 900
+        && (!('notifyShiftEvents' in data) || data.notifyShiftEvents is bool)
+        && (!('notifyArrival' in data) || data.notifyArrival is bool)
+        && (!('notifyPickupDelivery' in data) || data.notifyPickupDelivery is bool)
+        && (!('notifyPayments' in data) || data.notifyPayments is bool)
+        && (!('notifyDelays' in data) || data.notifyDelays is bool)
+        && (!('notifyGpsDisconnect' in data) || data.notifyGpsDisconnect is bool)
+        && isValidTimestamp(data.updatedAt);
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().keys().hasAll(['userId', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['userId', 'displayName', 'email', 'phone', 'role', 'driverId', 'createdAt', 'updatedAt'])
+        && (
+          (request.auth.uid == userId && incoming().userId == request.auth.uid && (incoming().role == 'DRIVER' || isAdmin())) ||
+          isAdmin()
+        );
+      allow update: if isSignedIn() && isValidId(userId)
+        && isValidUser(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin() ||
+          (request.auth.uid == userId && incoming().role == existing().role && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'driverId', 'updatedAt']))
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && isValidId(adminUid) && (request.auth.uid == adminUid || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(adminUid)
+        && incoming().keys().hasAll(['userId', 'email', 'createdAt'])
+        && incoming().keys().hasOnly(['userId', 'email', 'createdAt'])
+        && incoming().userId is string && incoming().email is string && isValidTimestamp(incoming().createdAt);
+      allow delete: if isAdmin();
+    }
+
+    match /drivers/{driverId} {
+      allow get: if isSignedIn() && isValidId(driverId) && (isAdmin() || resource.data.userId == request.auth.uid || hasVerifiedEmail(resource.data.email));
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid || hasVerifiedEmail(resource.data.email));
+      allow create: if isAdmin() && isValidId(driverId) && isValidDriver(incoming())
+        && incoming().keys().hasAll(['userId', 'name', 'username', 'phone', 'status', 'gpsActive', 'isDeleted', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['userId', 'email', 'name', 'username', 'phone', 'status', 'gpsActive', 'lastLat', 'lastLng', 'lastAccuracyMeters', 'lastGpsAtEpochMs', 'isDeleted', 'createdAt', 'updatedAt']);
+      allow update: if isSignedIn() && isValidId(driverId)
+        && isValidDriver(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin() ||
+          (existing().userId == request.auth.uid
+            && incoming().userId == existing().userId
+            && incoming().isDeleted == existing().isDeleted
+            && existing().status != 'SUSPENDED'
+            && incoming().status in ['ON_SHIFT', 'OFF_SHIFT', 'ACTIVE']
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'gpsActive', 'lastLat', 'lastLng', 'lastAccuracyMeters', 'lastGpsAtEpochMs', 'updatedAt'])) ||
+          (existing().userId == ''
+            && hasVerifiedEmail(existing().email)
+            && incoming().userId == request.auth.uid
+            && incoming().isDeleted == existing().isDeleted
+            && incoming().diff(existing()).affectedKeys().hasOnly(['userId', 'updatedAt']))
+        );
+      allow delete: if false; // Retain historical driver records via isDeleted soft-delete
+    }
+
+    match /customers/{customerId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming())
+        && incoming().keys().hasAll(['name', 'primaryPhone', 'isActive', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['name', 'primaryPhone', 'secondaryPhone', 'notes', 'isActive', 'createdAt', 'updatedAt']);
+      allow update: if isAdmin() && isValidId(customerId) && isValidCustomer(incoming())
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if false;
+    }
+
+    match /locations/{locationId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() && isValidId(locationId) && isValidLocation(incoming())
+        && incoming().keys().hasAll(['customerId', 'branchName', 'primaryPhone', 'latitude', 'longitude', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['customerId', 'customerName', 'branchName', 'invoiceNumber', 'primaryPhone', 'secondaryPhone', 'address', 'city', 'district', 'latitude', 'longitude', 'accessInstructions', 'notes', 'createdAt', 'updatedAt'])
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId));
+      allow update: if isAdmin() && isValidId(locationId) && isValidLocation(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().customerId == existing().customerId;
+      allow delete: if false;
+    }
+
+    match /visits/{visitId} {
+      allow get: if isSignedIn() && isValidId(visitId) && (isAdmin() || resource.data.assignedDriverUserId == request.auth.uid || resource.data.assignedDriverId == callerDriverId());
+      allow list: if isSignedIn() && (isAdmin() || resource.data.assignedDriverUserId == request.auth.uid || resource.data.assignedDriverId == callerDriverId());
+      allow create: if isAdmin() && isValidId(visitId) && isValidVisit(incoming())
+        && incoming().keys().hasAll(['customerId', 'locationId', 'locationName', 'primaryPhone', 'assignedDriverId', 'assignedDriverUserId', 'operationType', 'priority', 'status', 'scheduledAtEpochMs', 'paymentMethod', 'paymentStatus', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['customerId', 'locationId', 'customerName', 'locationName', 'district', 'address', 'primaryPhone', 'secondaryPhone', 'accessInstructions', 'latitude', 'longitude', 'assignedDriverId', 'assignedDriverUserId', 'assignedDriverName', 'operationType', 'priority', 'status', 'scheduledAtEpochMs', 'arrivedAtEpochMs', 'startedAtEpochMs', 'completedAtEpochMs', 'delaySeconds', 'delayMinutes', 'insideGeofence', 'arrivalDistanceMeters', 'invoiceNumber', 'posInvoiceRef', 'amountDue', 'amountCollected', 'paymentMethod', 'paymentStatus', 'pickupNotes', 'pickupPhotoUri', 'nonExecutionReason', 'recurringScheduleId', 'occurrenceKey', 'notes', 'createdAt', 'updatedAt'])
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && exists(/databases/$(database)/documents/locations/$(incoming().locationId));
+      allow update: if isSignedIn() && isValidId(visitId)
+        && isValidVisit(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().customerId == existing().customerId
+        && incoming().locationId == existing().locationId
+        && (
+          isAdmin() ||
+          ((existing().assignedDriverUserId == request.auth.uid || existing().assignedDriverId == callerDriverId())
+            && incoming().assignedDriverUserId == existing().assignedDriverUserId
+            && incoming().assignedDriverId == existing().assignedDriverId
+            && incoming().scheduledAtEpochMs == existing().scheduledAtEpochMs
+            && (!('amountDue' in existing()) || existing().amountDue == 0 || incoming().amountDue == existing().amountDue)
+            && existing().status != 'COMPLETED'
+            && existing().status != 'CANCELLED'
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'arrivedAtEpochMs', 'startedAtEpochMs', 'completedAtEpochMs',
+              'delaySeconds', 'delayMinutes', 'insideGeofence', 'arrivalDistanceMeters',
+              'invoiceNumber', 'amountDue', 'amountCollected', 'paymentMethod', 'paymentStatus',
+              'pickupNotes', 'pickupPhotoUri', 'nonExecutionReason', 'updatedAt'
+            ]))
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /recurring_schedules/{scheduleId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() && isValidId(scheduleId) && isValidRecurringSchedule(incoming())
+        && incoming().keys().hasAll(['customerId', 'locationId', 'assignedDriverId', 'assignedDriverUserId', 'operationType', 'weekdaysCsv', 'timeHHmm', 'startEpochMs', 'isContinuous', 'isActive', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['customerId', 'locationId', 'customerName', 'locationName', 'assignedDriverId', 'assignedDriverUserId', 'assignedDriverName', 'operationType', 'weekdaysCsv', 'timeHHmm', 'startEpochMs', 'endEpochMs', 'isContinuous', 'isActive', 'createdAt', 'updatedAt']);
+      allow update: if isAdmin() && isValidId(scheduleId) && isValidRecurringSchedule(incoming())
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /driver_attendance/{attendanceId} {
+      allow get: if isSignedIn() && isValidId(attendanceId) && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming())
+        && incoming().keys().hasAll(['driverId', 'userId', 'driverName', 'startedAtEpochMs', 'isActive', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['driverId', 'userId', 'driverName', 'startedAtEpochMs', 'endedAtEpochMs', 'durationMinutes', 'isActive', 'createdAt', 'updatedAt'])
+        && (isAdmin() || incoming().userId == request.auth.uid);
+      allow update: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().userId == existing().userId
+        && (
+          isAdmin() ||
+          (existing().userId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['endedAtEpochMs', 'durationMinutes', 'isActive', 'updatedAt']))
+        );
+      allow delete: if false;
+    }
+
+    match /gps_locations/{pointId} {
+      allow get: if isSignedIn() && isValidId(pointId) && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(pointId) && isValidGpsPoint(incoming())
+        && incoming().keys().hasAll(['driverId', 'userId', 'attendanceId', 'latitude', 'longitude', 'accuracyMeters', 'recordedAtEpochMs', 'createdAt'])
+        && incoming().keys().hasOnly(['driverId', 'userId', 'attendanceId', 'latitude', 'longitude', 'accuracyMeters', 'speedMps', 'isStopped', 'recordedAtEpochMs', 'createdAt'])
+        && (isAdmin() || incoming().userId == request.auth.uid);
+      allow update, delete: if false;
+    }
+
+    match /payment_records/{paymentId} {
+      allow get: if isSignedIn() && isValidId(paymentId) && (isAdmin() || resource.data.driverUserId == request.auth.uid);
+      allow list: if isSignedIn() && (isAdmin() || resource.data.driverUserId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(paymentId) && isValidPaymentRecord(incoming())
+        && incoming().keys().hasAll(['visitId', 'driverId', 'driverUserId', 'invoiceNumber', 'amountDue', 'amountCollected', 'amountRemaining', 'paymentMethod', 'paymentStatus', 'deliveryStatus', 'recordedAtEpochMs', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['visitId', 'driverId', 'driverUserId', 'driverName', 'customerId', 'locationId', 'invoiceNumber', 'amountDue', 'amountCollected', 'amountRemaining', 'paymentMethod', 'paymentStatus', 'deliveryStatus', 'latitude', 'longitude', 'notes', 'recordedAtEpochMs', 'createdAt', 'updatedAt'])
+        && (isAdmin() || incoming().driverUserId == request.auth.uid);
+      allow update: if isAdmin() && isValidId(paymentId) && isValidPaymentRecord(incoming())
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if false; // Never delete financial records
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId)
+        && (isAdmin() || resource.data.targetUserId == request.auth.uid || resource.data.targetUserId == 'ALL' || resource.data.senderUserId == request.auth.uid);
+      allow list: if isSignedIn()
+        && (isAdmin() || resource.data.targetUserId == request.auth.uid || resource.data.targetUserId == 'ALL');
+      allow create: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming())
+        && incoming().keys().hasAll(['targetUserId', 'senderUserId', 'title', 'body', 'type', 'isRead', 'createdAt', 'updatedAt'])
+        && incoming().keys().hasOnly(['targetUserId', 'senderUserId', 'title', 'body', 'type', 'relatedVisitId', 'isRead', 'createdAt', 'updatedAt'])
+        && (isAdmin() || incoming().senderUserId == request.auth.uid);
+      allow update: if isSignedIn() && isValidId(notificationId) && isValidNotification(incoming())
+        && incoming().createdAt == existing().createdAt
+        && (
+          isAdmin() ||
+          ((existing().targetUserId == request.auth.uid || existing().targetUserId == 'ALL')
+            && incoming().diff(existing()).affectedKeys().hasOnly(['isRead', 'updatedAt']))
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming())
+        && incoming().keys().hasAll(['actorUserId', 'actorName', 'actionType', 'entityType', 'entityId', 'oldValue', 'newValue', 'createdAt'])
+        && incoming().keys().hasOnly(['actorUserId', 'actorName', 'actionType', 'entityType', 'entityId', 'oldValue', 'newValue', 'metadata', 'createdAt'])
+        && (isAdmin() || incoming().actorUserId == request.auth.uid);
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    match /app_settings/{settingId} {
+      allow get: if isSignedIn() && isValidId(settingId);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() && isValidId(settingId) && isValidSettings(incoming())
+        && incoming().keys().hasAll(['gracePeriodMinutes', 'geofenceRadiusMeters', 'gpsMovingIntervalSec', 'gpsIdleIntervalSec', 'updatedAt'])
+        && incoming().keys().hasOnly(['gracePeriodMinutes', 'geofenceRadiusMeters', 'gpsMovingIntervalSec', 'gpsIdleIntervalSec', 'notifyShiftEvents', 'notifyArrival', 'notifyPickupDelivery', 'notifyPayments', 'notifyDelays', 'notifyGpsDisconnect', 'updatedAt']);
+      allow delete: if false;
+    }
+  }
+}

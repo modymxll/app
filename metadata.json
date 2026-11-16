@@ -1,0 +1,6 @@
+{
+  "name": "Bubbles Delivery",
+  "description": "Bubbles Laundry delivery, fleet, visits, GPS tracking, and financial management system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
